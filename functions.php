@@ -349,6 +349,118 @@ function italianMonth(DateTimeInterface $date): string
     ][(int)$date->format('n')];
 }
 
+function execAvailable(): bool
+{
+    if (!function_exists('exec')) {
+        return false;
+    }
+
+    $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
+
+    return !in_array('exec', $disabled, true);
+}
+
+/**
+ * Cerca il binario Node: prima il percorso configurato, poi i percorsi
+ * tipici dei vari hosting (Plesk, cPanel, ecc.), infine `command -v node`.
+ */
+function findNodeBinary(): ?string
+{
+    $candidates = [
+        NODE_BINARY,
+        '/usr/local/bin/node',
+        '/usr/bin/node',
+        '/usr/bin/nodejs',
+        '/opt/homebrew/bin/node',
+    ];
+
+    foreach (['/opt/plesk/node/*/bin/node', '/opt/alt/alt-nodejs*/root/usr/bin/node'] as $pattern) {
+        $found = glob($pattern) ?: [];
+        rsort($found, SORT_NATURAL);
+        $candidates = array_merge($candidates, $found);
+    }
+
+    foreach ($candidates as $candidate) {
+        if ($candidate !== '' && @is_executable($candidate)) {
+            return $candidate;
+        }
+    }
+
+    if (execAvailable()) {
+        $path = trim((string)@exec('command -v node 2>/dev/null'));
+        if ($path !== '' && @is_executable($path)) {
+            return $path;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Tenta la generazione con Playwright/Chromium (resa grafica migliore).
+ * Restituisce false se l'ambiente non lo consente o il comando fallisce.
+ */
+function tryPlaywrightPoster(): bool
+{
+    if (!execAvailable()) {
+        logMessage('Playwright non disponibile: exec() disabilitata sul server.');
+        return false;
+    }
+
+    if (!is_dir(__DIR__ . '/node_modules/playwright')) {
+        logMessage('Playwright non disponibile: node_modules/playwright mancante (eseguire install-playwright.sh).');
+        return false;
+    }
+
+    $node = findNodeBinary();
+    if ($node === null) {
+        logMessage('Playwright non disponibile: binario Node non trovato sul server.');
+        return false;
+    }
+
+    $env = [
+        'POSTER_URL' => POSTER_URL,
+        'OUTPUT_JPG' => OUTPUT_JPG,
+        'JPG_QUALITY' => (string)JPG_QUALITY,
+        'DEVICE_SCALE_FACTOR' => (string)POSTER_SCALE,
+    ];
+
+    $command = '';
+    foreach ($env as $key => $value) {
+        $command .= $key . '=' . escapeshellarg($value) . ' ';
+    }
+
+    $command .= escapeshellcmd($node)
+        . ' '
+        . escapeshellarg(__DIR__ . '/generate-image.mjs')
+        . ' 2>&1';
+
+    exec($command, $output, $exitCode);
+
+    if ($exitCode !== 0 || !is_file(OUTPUT_JPG)) {
+        logMessage("Playwright fallito (exit {$exitCode}): " . implode(' | ', array_slice($output, -3)));
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Genera il JPG master: prova Playwright/Chromium e, se non disponibile
+ * (hosting senza Node), ripiega automaticamente sul renderer PHP GD.
+ */
+function generatePoster(array $events): void
+{
+    if (tryPlaywrightPoster()) {
+        logMessage('JPG master generato con Playwright/Chromium.');
+        return;
+    }
+
+    require_once __DIR__ . '/image-renderer.php';
+    generatePosterJpg($events, OUTPUT_JPG);
+    logMessage('JPG master generato con il renderer PHP GD (fallback).');
+}
+
 /**
  * Ricava dal JPG master la variante ottimizzata per il canale WhatsApp:
  * lato maggiore entro WHATSAPP_MAX_SIDE, JPEG baseline e peso contenuto,

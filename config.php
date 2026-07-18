@@ -67,11 +67,8 @@ const POSTER_SCALE = 2;
 const JPG_QUALITY = 98;
 
 /*
- * Per usare Inter anche nel JPG, caricare manualmente nella cartella:
- * assets/fonts/Inter-Regular.ttf
- * assets/fonts/Inter-Bold.ttf
- *
- * Il codice li userà automaticamente. Se non presenti, usa i font di sistema.
+ * Font usati dal renderer PHP GD. I file Inter sono inclusi nel progetto;
+ * se mancano, il codice ripiega sui font di sistema.
  */
 const FONT_REGULAR_FILE = __DIR__ . '/assets/fonts/Inter-Regular.ttf';
 const FONT_BOLD_FILE = __DIR__ . '/assets/fonts/Inter-Bold.ttf';
@@ -79,9 +76,13 @@ const FONT_BOLD_FILE = __DIR__ . '/assets/fonts/Inter-Bold.ttf';
 
 /*
 |--------------------------------------------------------------------------
-| PLAYWRIGHT / CHROMIUM
+| PLAYWRIGHT / CHROMIUM (OPZIONALE)
 |--------------------------------------------------------------------------
-| Il motore JPG usa Chromium e fotografa direttamente index.php.
-| In caso di percorso diverso, modificare NODE_BINARY.
+| Se Node e Playwright sono installati, il JPG viene fotografato da
+| Chromium (resa identica al browser). Il binario Node viene cercato
+| automaticamente nei percorsi tipici degli hosting; NODE_BINARY viene
+| provato per primo. Se Node non è disponibile, il sistema usa
+| automaticamente il renderer PHP GD: la grafica viene generata comunque.
 */
 const NODE_BINARY = '/usr/bin/node';
+const POSTER_URL = 'https://eventi.impegnopercampoformido.it/calendario-eventi/index.php?render=1';

@@ -339,38 +339,28 @@ function generatePosterJpg(array $events, string $outputPath): void
         scaleValue(165)
     );
 
-    // Scritta Comune più piccola e senza sovrapposizioni
-    imagettftext($image, scaleValue(21), 0, scaleValue(195), scaleValue(105), $white, $font, 'CITTÀ DI');
-    imagettftext($image, scaleValue(27), 0, scaleValue(195), scaleValue(145), $white, $bold, 'CAMPOFORMIDO');
+    // Scritta Comune
+    imagettftext($image, scaleValue(19), 0, scaleValue(195), scaleValue(105), $white, $font, 'CITTÀ DI');
+    imagettftext($image, scaleValue(24), 0, scaleValue(195), scaleValue(145), $white, $bold, 'CAMPOFORMIDO');
 
-    imagettftext($image, scaleValue(30), 0, scaleValue(475), scaleValue(82), $white, $bold, 'I PROSSIMI');
+    // Il blocco titolo parte dopo la scritta del Comune, senza sovrapporsi
+    // né alla scritta né all'icona calendario a destra.
+    $brandEnd = scaleValue(195) + textWidth('CAMPOFORMIDO', scaleValue(24), $bold);
+    $headlineX = max(scaleValue(475), $brandEnd + scaleValue(35));
+    $headlineMaxWidth = scaleValue(900) - $headlineX;
 
-    $number = (string)$count;
-    $numberSize = scaleValue(58);
-    $numberX = scaleValue(475);
-    $numberY = scaleValue(161);
+    imagettftext($image, scaleValue(30), 0, $headlineX, scaleValue(82), $white, $bold, 'I PROSSIMI');
 
-    imagettftext($image, $numberSize, 0, $numberX, $numberY, $white, $bold, $number);
+    $headline = $count . ' ' . ($count === 1 ? 'EVENTO' : 'EVENTI');
+    $headlineSize = fitTextSize($headline, scaleValue(58), scaleValue(36), $headlineMaxWidth, $bold);
 
-    $numberWidth = textWidth($number, $numberSize, $bold);
-    $eventsWord = $count === 1 ? 'EVENTO' : 'EVENTI';
-
-    imagettftext(
-        $image,
-        $numberSize,
-        0,
-        $numberX + $numberWidth + scaleValue(26),
-        $numberY,
-        $white,
-        $bold,
-        $eventsWord
-    );
+    imagettftext($image, $headlineSize, 0, $headlineX, scaleValue(161), $white, $bold, $headline);
 
     imagettftext(
         $image,
         scaleValue(29),
         0,
-        scaleValue(475),
+        $headlineX,
         scaleValue(216),
         hexColor($image, '#DDEFFF'),
         $bold,
@@ -388,7 +378,12 @@ function generatePosterJpg(array $events, string $outputPath): void
 
     $availableHeight = $footerTop - $eventsTop - 18;
     $cardHeight = (int)floor(($availableHeight - (($count - 1) * $gap)) / $count);
-    $cardHeight = max(175, min(220, $cardHeight));
+    $cardHeight = min(220, max(150, $cardHeight));
+
+    // Le coordinate verticali interne sono progettate per card alte 175 px:
+    // per card più basse vengono compresse in proporzione.
+    $s = min(1.0, $cardHeight / 175);
+    $sy = static fn(int|float $value): int => (int)round($value * $s);
 
     $y = $eventsTop;
 
@@ -489,7 +484,7 @@ function generatePosterJpg(array $events, string $outputPath): void
             $weekdaySize,
             0,
             scaleValue(134) - intdiv(textWidth($weekday, $weekdaySize, $bold), 2),
-            scaleValue($y + 57),
+            scaleValue($y + $sy(57)),
             $navy,
             $bold,
             $weekday
@@ -503,7 +498,7 @@ function generatePosterJpg(array $events, string $outputPath): void
             $daySize,
             0,
             scaleValue(134) - intdiv(textWidth($day, $daySize, $bold), 2),
-            scaleValue($y + 132),
+            scaleValue($y + $sy(132)),
             $navy,
             $bold,
             $day
@@ -523,7 +518,7 @@ function generatePosterJpg(array $events, string $outputPath): void
             $monthSize,
             0,
             scaleValue(134) - intdiv(textWidth($month, $monthSize, $bold), 2),
-            scaleValue($y + 171),
+            scaleValue($y + $sy(167)),
             $navy,
             $bold,
             $month
@@ -563,7 +558,11 @@ function generatePosterJpg(array $events, string $outputPath): void
             $category
         );
 
-        $titleSize = scaleValue($count <= 2 ? 24 : 21);
+        // Le dimensioni GD sono in punti (1 pt ≈ 1,33 px): l'interlinea
+        // deve essere ~1,5 volte il corpo per evitare sovrapposizioni.
+        $titleBaseSize = $count <= 2 ? 24 : 21;
+        $titleSize = scaleValue($titleBaseSize);
+        $titleLineHeight = scaleValue((int)round($titleBaseSize * 1.55));
         $titleLines = wrapText(
             $event['title'],
             $titleSize,
@@ -576,33 +575,47 @@ function generatePosterJpg(array $events, string $outputPath): void
             $image,
             $titleLines,
             scaleValue($mainX),
-            scaleValue($y + 92),
+            scaleValue($y + $sy(90)),
             $titleSize,
             $text,
             $bold,
-            scaleValue(($count <= 2 ? 24 : 21) + 8)
+            $titleLineHeight
         );
 
         $descriptionBaseSize = $count <= 2 ? 16 : 14;
         $descriptionSize = scaleValue($descriptionBaseSize);
-        $descriptionLines = wrapText(
-            $event['description'],
-            $descriptionSize,
-            $font,
-            scaleValue($mainWidth),
-            2
-        );
+        $descriptionLineHeight = scaleValue((int)round($descriptionBaseSize * 1.5));
+        $descriptionStart = $afterTitle - scaleValue(2);
 
-        drawLines(
-            $image,
-            $descriptionLines,
-            scaleValue($mainX),
-            min($afterTitle + scaleValue(10), scaleValue($y + $cardHeight - 39)),
-            $descriptionSize,
-            $muted,
-            $font,
-            scaleValue($descriptionBaseSize + 8)
-        );
+        // Solo le righe che restano dentro la card, senza toccare il bordo.
+        $maxDescriptionLines = 0;
+        $bottomLimit = scaleValue($y + $cardHeight - 12);
+        for ($n = 1; $n <= 2; $n++) {
+            if ($descriptionStart + ($n - 1) * $descriptionLineHeight <= $bottomLimit) {
+                $maxDescriptionLines = $n;
+            }
+        }
+
+        if ($maxDescriptionLines > 0) {
+            $descriptionLines = wrapText(
+                $event['description'],
+                $descriptionSize,
+                $font,
+                scaleValue($mainWidth),
+                $maxDescriptionLines
+            );
+
+            drawLines(
+                $image,
+                $descriptionLines,
+                scaleValue($mainX),
+                $descriptionStart,
+                $descriptionSize,
+                $muted,
+                $font,
+                $descriptionLineHeight
+            );
+        }
 
         imageline(
             $image,
@@ -615,15 +628,23 @@ function generatePosterJpg(array $events, string $outputPath): void
 
         $metaX = 808;
 
-        drawClockIcon($image, scaleValue($metaX), scaleValue($y + 76), $blue);
+        // L'ora d'inizio: dimensione ridotta per orari lunghi tipo "Orario da definire"
+        $timeSize = fitTextSize(
+            $event['time'],
+            scaleValue(31),
+            scaleValue(15),
+            scaleValue(180),
+            $bold
+        );
 
-        // Solo l'ora d'inizio più grande
+        drawClockIcon($image, scaleValue($metaX), scaleValue($y + $sy(76)), $blue);
+
         imagettftext(
             $image,
-            scaleValue(31),
+            $timeSize,
             0,
             scaleValue($metaX + 35),
-            scaleValue($y + 87),
+            scaleValue($y + $sy(87)),
             $text,
             $bold,
             $event['time']
@@ -632,7 +653,7 @@ function generatePosterJpg(array $events, string $outputPath): void
         drawLocationPin(
             $image,
             scaleValue($metaX),
-            scaleValue($y + 141),
+            scaleValue($y + $sy(137)),
             $blue,
             $white
         );
@@ -650,7 +671,7 @@ function generatePosterJpg(array $events, string $outputPath): void
             $placeSize,
             0,
             scaleValue($metaX + 35),
-            scaleValue($y + 148),
+            scaleValue($y + $sy(144)),
             $text,
             $bold,
             $event['place']
@@ -662,7 +683,7 @@ function generatePosterJpg(array $events, string $outputPath): void
                 scaleValue(13),
                 0,
                 scaleValue($metaX + 35),
-                scaleValue($y + 173),
+                scaleValue($y + $sy(167)),
                 $muted,
                 $font,
                 $event['locality']

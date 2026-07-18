@@ -48,7 +48,7 @@ try {
         exit("Hash iniziale salvato. Nessuna email inviata.\n");
     }
 
-    generatePosterWithPlaywright();
+    generatePoster($events);
     generateWhatsAppJpg();
 
     $subject = 'Prossimi ' . count($events) . ' eventi a Campoformido';
@@ -138,35 +138,6 @@ function sendJpgEmail(array $recipients, string $subject, string $body, array $a
     if (!mail($to, $encodedSubject, $message, implode("\r\n", $headers))) {
         throw new RuntimeException(
             'La funzione PHP mail() non ha accettato il messaggio. Verificare il mittente o configurare SMTP/PHPMailer.'
-        );
-    }
-}
-
-
-function generatePosterWithPlaywright(): void
-{
-    $env = [
-        'POSTER_URL' => 'https://eventi.impegnopercampoformido.it/calendario-eventi/index.php?render=1',
-        'OUTPUT_JPG' => OUTPUT_JPG,
-        'JPG_QUALITY' => (string)JPG_QUALITY,
-        'DEVICE_SCALE_FACTOR' => (string)POSTER_SCALE,
-    ];
-
-    $command = '';
-    foreach ($env as $key => $value) {
-        $command .= $key . '=' . escapeshellarg($value) . ' ';
-    }
-
-    $command .= escapeshellcmd(NODE_BINARY)
-        . ' '
-        . escapeshellarg(__DIR__ . '/generate-image.mjs')
-        . ' 2>&1';
-
-    exec($command, $output, $exitCode);
-
-    if ($exitCode !== 0 || !is_file(OUTPUT_JPG)) {
-        throw new RuntimeException(
-            "Playwright non ha generato il JPG:\n" . implode("\n", $output)
         );
     }
 }

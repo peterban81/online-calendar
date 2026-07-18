@@ -1,5 +1,9 @@
-Per usare Inter anche nel JPG, inserire qui:
-- Inter-Regular.ttf
-- Inter-Bold.ttf
+I font Inter (Inter-Regular.ttf e Inter-Bold.ttf) sono inclusi nel progetto
+e vengono usati dal renderer PHP GD quando Playwright/Chromium non è
+disponibile sull'hosting.
 
-Se i file non sono presenti, il sistema usa automaticamente DejaVu Sans o Liberation Sans.
+Se i file vengono rimossi, il sistema ripiega automaticamente su
+DejaVu Sans o Liberation Sans, se presenti sul server.
+
+Inter è distribuito con licenza SIL Open Font License 1.1
+(https://github.com/rsms/inter).

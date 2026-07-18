@@ -10,29 +10,12 @@ $whatsapp = isset($_GET['whatsapp']) && $_GET['whatsapp'] === '1';
 $needsGeneration = $force || !is_file(OUTPUT_JPG);
 
 if ($needsGeneration) {
-    $node = defined('NODE_BINARY') ? NODE_BINARY : 'node';
-    $script = __DIR__ . '/generate-image.mjs';
-
-    $env = [
-        'POSTER_URL' => 'https://eventi.impegnopercampoformido.it/calendario-eventi/index.php?render=1',
-        'OUTPUT_JPG' => OUTPUT_JPG,
-        'JPG_QUALITY' => (string)JPG_QUALITY,
-        'DEVICE_SCALE_FACTOR' => (string)POSTER_SCALE,
-    ];
-
-    $command = '';
-    foreach ($env as $key => $value) {
-        $command .= $key . '=' . escapeshellarg($value) . ' ';
-    }
-    $command .= escapeshellcmd($node) . ' ' . escapeshellarg($script) . ' 2>&1';
-
-    exec($command, $output, $exitCode);
-
-    if ($exitCode !== 0 || !is_file(OUTPUT_JPG)) {
+    try {
+        generatePoster(getUpcomingEvents());
+    } catch (Throwable $exception) {
         http_response_code(500);
         header('Content-Type: text/plain; charset=utf-8');
-        echo "Impossibile generare il JPG con Playwright.\n\n";
-        echo implode("\n", $output);
+        echo "Impossibile generare il JPG.\n\n" . $exception->getMessage();
         exit;
     }
 }

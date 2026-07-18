@@ -2,3 +2,4 @@ config.php
 data/cron.log
 data/ultimo-hash.txt
 node_modules/
+output/*.jpg
