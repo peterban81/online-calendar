@@ -1,0 +1,12 @@
+{
+  "name": "calendario-eventi-campoformido",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "install-browser": "playwright install chromium",
+    "generate": "node generate-image.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

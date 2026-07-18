@@ -1,0 +1,5 @@
+Per usare Inter anche nel JPG, inserire qui:
+- Inter-Regular.ttf
+- Inter-Bold.ttf
+
+Se i file non sono presenti, il sistema usa automaticamente DejaVu Sans o Liberation Sans.
