@@ -712,7 +712,7 @@ function generatePosterJpg(array $events, string $outputPath): void
             $titleLineHeight
         );
 
-        $descriptionBaseSize = $count <= 2 ? 16 : 14;
+        $descriptionBaseSize = $count <= 2 ? 14 : 13;
         $descriptionSize = scaleValue($descriptionBaseSize);
         $descriptionLineHeight = scaleValue((int)round($descriptionBaseSize * 1.5));
         $descriptionStart = $afterTitle - scaleValue(2);
