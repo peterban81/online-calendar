@@ -423,31 +423,24 @@ function generatePosterJpg(array $events, string $outputPath): void
 
         $dateRight = 225;
 
-        // Fondino azzurro a tutta altezza del box
-        imagefilledrectangle(
+        // Fondino azzurro con gli angoli sinistri stondati come la card
+        roundedRectangle(
             $image,
             scaleValue($x1 + 2),
             scaleValue($y + 2),
             scaleValue($dateRight),
             scaleValue($y + $cardHeight - 2),
+            scaleValue(17),
             $dateBlue
         );
 
-        // Ripristina gli angoli arrotondati sinistri con due cerchi
-        imagefilledellipse(
+        // Il lato destro del fondino resta dritto fino alla linea divisoria
+        imagefilledrectangle(
             $image,
-            scaleValue($x1 + 19),
-            scaleValue($y + 19),
-            scaleValue(34),
-            scaleValue(34),
-            $dateBlue
-        );
-        imagefilledellipse(
-            $image,
-            scaleValue($x1 + 19),
-            scaleValue($y + $cardHeight - 19),
-            scaleValue(34),
-            scaleValue(34),
+            scaleValue($dateRight - 20),
+            scaleValue($y + 2),
+            scaleValue($dateRight),
+            scaleValue($y + $cardHeight - 2),
             $dateBlue
         );
 
