@@ -3,6 +3,30 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
+/*
+ * Valori di riserva per installazioni con un config.php precedente:
+ * ogni costante mancante viene definita qui con il suo valore standard,
+ * così l'aggiornamento del codice non richiede di rifare il config.
+ */
+$configDefaults = [
+    'NODE_BINARY' => '/usr/bin/node',
+    'POSTER_URL' => 'https://eventi.impegnopercampoformido.it/calendario-eventi/index.php?render=1',
+    'OUTPUT_JPG_WHATSAPP' => OUTPUT_DIR . '/prossimi-eventi-whatsapp.jpg',
+    'WHATSAPP_MAX_SIDE' => 1600,
+    'WHATSAPP_JPG_QUALITY' => 88,
+    'WHATSAPP_MAX_BYTES' => 900 * 1024,
+    'FONT_REGULAR_FILE' => __DIR__ . '/assets/fonts/Inter-Regular.ttf',
+    'FONT_BOLD_FILE' => __DIR__ . '/assets/fonts/Inter-Bold.ttf',
+];
+
+foreach ($configDefaults as $constantName => $defaultValue) {
+    if (!defined($constantName)) {
+        define($constantName, $defaultValue);
+    }
+}
+
+unset($configDefaults, $constantName, $defaultValue);
+
 function h(string $value): string
 {
     return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -454,6 +478,15 @@ function generatePoster(array $events): void
     if (tryPlaywrightPoster()) {
         logMessage('JPG master generato con Playwright/Chromium.');
         return;
+    }
+
+    if (!extension_loaded('gd') || !function_exists('imagettftext')) {
+        throw new RuntimeException(
+            'Nessun motore grafico disponibile: Playwright/Node non è utilizzabile '
+            . 'e l’estensione PHP GD con FreeType non è attiva sul server. '
+            . 'Attivare GD dal pannello dell’hosting (di solito in "Impostazioni PHP") '
+            . 'oppure installare Node e Playwright. Vedere test.php per la diagnostica.'
+        );
     }
 
     require_once __DIR__ . '/image-renderer.php';
