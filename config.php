@@ -37,6 +37,19 @@ const POSTER_WIDTH = 1080;
 const POSTER_HEIGHT = 1350;
 
 /*
+|--------------------------------------------------------------------------
+| WHATSAPP
+|--------------------------------------------------------------------------
+| WhatsApp ricomprime le immagini con lato maggiore oltre ~1600 px.
+| La variante WhatsApp viene ricavata dal JPG master e resta entro
+| questi limiti, così il canale la pubblica senza degradarla.
+*/
+const OUTPUT_JPG_WHATSAPP = OUTPUT_DIR . '/prossimi-eventi-whatsapp.jpg';
+const WHATSAPP_MAX_SIDE = 1600;
+const WHATSAPP_JPG_QUALITY = 88;
+const WHATSAPP_MAX_BYTES = 900 * 1024;
+
+/*
  * false: alla prima esecuzione genera e invia.
  * true: alla prima esecuzione salva solo l'hash senza inviare.
  */

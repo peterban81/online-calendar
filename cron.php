@@ -49,9 +49,12 @@ try {
     }
 
     generatePosterWithPlaywright();
+    generateWhatsAppJpg();
 
     $subject = 'Prossimi ' . count($events) . ' eventi a Campoformido';
     $body = "In allegato trovi la nuova grafica con i prossimi eventi.\n\n"
+        . "- " . basename(OUTPUT_JPG) . ": versione ad alta risoluzione (stampa, sito).\n"
+        . "- " . basename(OUTPUT_JPG_WHATSAPP) . ": versione pronta per il canale WhatsApp del Comune.\n\n"
         . "Generata automaticamente il " . date('d/m/Y \a\l\l\e H:i') . ".\n"
         . CALENDAR_URL;
 
@@ -59,11 +62,15 @@ try {
         DESTINATION_EMAILS,
         $subject,
         $body,
-        OUTPUT_JPG
+        [OUTPUT_JPG, OUTPUT_JPG_WHATSAPP]
     );
 
     file_put_contents(HASH_FILE, $newHash, LOCK_EX);
-    logMessage('Grafica generata e inviata: ' . basename(OUTPUT_JPG) . ' - eventi: ' . count($events));
+    logMessage(
+        'Grafica generata e inviata: ' . basename(OUTPUT_JPG)
+        . ' + ' . basename(OUTPUT_JPG_WHATSAPP)
+        . ' - eventi: ' . count($events)
+    );
 
     echo "Grafica generata e inviata correttamente.\n";
 } catch (Throwable $exception) {
@@ -73,15 +80,19 @@ try {
     exit(1);
 }
 
-function sendJpgEmail(array $recipients, string $subject, string $body, string $attachmentPath): void
+function sendJpgEmail(array $recipients, string $subject, string $body, array $attachmentPaths): void
 {
-    if (!is_file($attachmentPath)) {
-        throw new RuntimeException('Allegato JPG non trovato.');
+    foreach ($attachmentPaths as $attachmentPath) {
+        if (!is_file($attachmentPath)) {
+            throw new RuntimeException('Allegato JPG non trovato: ' . $attachmentPath);
+        }
+    }
+
+    if (!$attachmentPaths) {
+        throw new RuntimeException('Nessun allegato JPG da inviare.');
     }
 
     $boundary = '=_Campoformido_' . bin2hex(random_bytes(12));
-    $filename = basename($attachmentPath);
-    $attachment = chunk_split(base64_encode((string)file_get_contents($attachmentPath)));
 
     $headers = [
         'From: ' . MAIL_FROM_NAME . ' <' . MAIL_FROM . '>',
@@ -94,11 +105,18 @@ function sendJpgEmail(array $recipients, string $subject, string $body, string $
     $message .= "Content-Type: text/plain; charset=UTF-8\r\n";
     $message .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
     $message .= $body . "\r\n\r\n";
-    $message .= '--' . $boundary . "\r\n";
-    $message .= 'Content-Type: image/jpeg; name="' . $filename . '"' . "\r\n";
-    $message .= "Content-Transfer-Encoding: base64\r\n";
-    $message .= 'Content-Disposition: attachment; filename="' . $filename . '"' . "\r\n\r\n";
-    $message .= $attachment . "\r\n";
+
+    foreach ($attachmentPaths as $attachmentPath) {
+        $filename = basename($attachmentPath);
+        $attachment = chunk_split(base64_encode((string)file_get_contents($attachmentPath)));
+
+        $message .= '--' . $boundary . "\r\n";
+        $message .= 'Content-Type: image/jpeg; name="' . $filename . '"' . "\r\n";
+        $message .= "Content-Transfer-Encoding: base64\r\n";
+        $message .= 'Content-Disposition: attachment; filename="' . $filename . '"' . "\r\n\r\n";
+        $message .= $attachment . "\r\n";
+    }
+
     $message .= '--' . $boundary . "--\r\n";
 
     $encodedSubject = '=?UTF-8?B?' . base64_encode($subject) . '?=';

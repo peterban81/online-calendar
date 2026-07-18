@@ -349,6 +349,73 @@ function italianMonth(DateTimeInterface $date): string
     ][(int)$date->format('n')];
 }
 
+/**
+ * Ricava dal JPG master la variante ottimizzata per il canale WhatsApp:
+ * lato maggiore entro WHATSAPP_MAX_SIDE, JPEG baseline e peso contenuto,
+ * così WhatsApp non ricomprime l'immagine degradandola.
+ */
+function generateWhatsAppJpg(string $sourcePath = OUTPUT_JPG, string $targetPath = OUTPUT_JPG_WHATSAPP): void
+{
+    if (!extension_loaded('gd')) {
+        throw new RuntimeException('L’estensione PHP GD non è attiva: impossibile creare il JPG per WhatsApp.');
+    }
+
+    if (!is_file($sourcePath)) {
+        throw new RuntimeException('JPG master non trovato: ' . $sourcePath);
+    }
+
+    $source = @imagecreatefromjpeg($sourcePath);
+    if (!$source) {
+        throw new RuntimeException('JPG master non leggibile: ' . $sourcePath);
+    }
+
+    $width = imagesx($source);
+    $height = imagesy($source);
+    $longestSide = max($width, $height);
+
+    if ($longestSide > WHATSAPP_MAX_SIDE) {
+        $ratio = WHATSAPP_MAX_SIDE / $longestSide;
+        $newWidth = max(1, (int)round($width * $ratio));
+        $newHeight = max(1, (int)round($height * $ratio));
+
+        $resized = imagecreatetruecolor($newWidth, $newHeight);
+        imagecopyresampled($resized, $source, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+        imagedestroy($source);
+        $source = $resized;
+    }
+
+    // JPEG baseline (non progressivo): il formato più compatibile con WhatsApp.
+    imageinterlace($source, false);
+
+    $targetDir = dirname($targetPath);
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0775, true);
+    }
+
+    $tempPath = $targetPath . '.tmp';
+    $quality = WHATSAPP_JPG_QUALITY;
+
+    // Riduce gradualmente la qualità solo se il file supera il peso massimo.
+    do {
+        if (!imagejpeg($source, $tempPath, $quality)) {
+            imagedestroy($source);
+            @unlink($tempPath);
+            throw new RuntimeException('Impossibile scrivere il JPG per WhatsApp: ' . $targetPath);
+        }
+
+        clearstatcache(true, $tempPath);
+        $sizeOk = filesize($tempPath) <= WHATSAPP_MAX_BYTES;
+        $quality -= 5;
+    } while (!$sizeOk && $quality >= 60);
+
+    imagedestroy($source);
+
+    if (!rename($tempPath, $targetPath)) {
+        @unlink($tempPath);
+        throw new RuntimeException('Impossibile salvare il JPG per WhatsApp: ' . $targetPath);
+    }
+}
+
 function logMessage(string $message): void
 {
     if (!is_dir(DATA_DIR)) {
