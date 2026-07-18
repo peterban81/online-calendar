@@ -6,7 +6,9 @@ require_once __DIR__ . '/functions.php';
 $isCli = PHP_SAPI === 'cli';
 
 if (!$isCli) {
-    $providedKey = (string)($_GET['key'] ?? '');
+    // $_REQUEST: la chiave può arrivare via GET (cron dell'hosting)
+    // o via POST (invio manuale da test.php).
+    $providedKey = (string)($_REQUEST['key'] ?? '');
     if (CRON_SECRET === 'CAMBIA-QUESTA-CHIAVE-PRIMA-DI-USARE-IL-CRON' || !hash_equals(CRON_SECRET, $providedKey)) {
         http_response_code(403);
         exit('Accesso negato.');
@@ -17,7 +19,7 @@ if (!$isCli) {
 
 $force = $isCli
     ? in_array('--force', $argv ?? [], true)
-    : isset($_GET['force']) && $_GET['force'] === '1';
+    : isset($_REQUEST['force']) && $_REQUEST['force'] === '1';
 
 try {
     if (!is_dir(DATA_DIR)) {

@@ -333,10 +333,10 @@ function generatePosterJpg(array $events, string $outputPath): void
     placeTransparentLogo(
         $image,
         __DIR__ . '/assets/logo-campoformido.png',
-        scaleValue(54),
-        scaleValue(45),
-        scaleValue(125),
-        scaleValue(165)
+        scaleValue(58),
+        scaleValue(55),
+        scaleValue(108),
+        scaleValue(145)
     );
 
     // Scritta Comune
@@ -451,13 +451,15 @@ function generatePosterJpg(array $events, string $outputPath): void
             $dateBlue
         );
 
-        // Fascia blu verticale a piena altezza
-        imagefilledrectangle(
+        // Fascia blu verticale con estremi arrotondati, contenuta
+        // dentro gli angoli stondati della card.
+        roundedRectangle(
             $image,
             scaleValue($x1 + 2),
-            scaleValue($y + 2),
+            scaleValue($y + 14),
             scaleValue($x1 + 8),
-            scaleValue($y + $cardHeight - 2),
+            scaleValue($y + $cardHeight - 14),
+            scaleValue(3),
             $blue
         );
 

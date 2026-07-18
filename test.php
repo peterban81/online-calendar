@@ -73,6 +73,23 @@ echo '<p>'
 
 /*
 |--------------------------------------------------------------------------
+| INVIO MANUALE DELLA MAIL
+|--------------------------------------------------------------------------
+| Riusa cron.php: serve la chiave CRON_SECRET (definita in config.php)
+| per evitare che chiunque visiti questa pagina possa inviare email.
+*/
+echo '<h2>Invio email manuale</h2>';
+echo '<p>Genera la locandina e la invia ai destinatari configurati in <code>config.php</code>. '
+    . 'Serve la chiave <code>CRON_SECRET</code> definita in <code>config.php</code>.</p>';
+echo '<form action="cron.php" method="post" style="font-family:sans-serif;font-size:15px">';
+echo '<p><label>Chiave cron: <input type="password" name="key" required size="40"></label></p>';
+echo '<p><label><input type="checkbox" name="force" value="1" checked> '
+    . 'Invia anche se gli eventi non sono cambiati (senza spunta invia solo se ci sono novità)</label></p>';
+echo '<p><button type="submit">Genera e invia la mail adesso</button></p>';
+echo '</form>';
+
+/*
+|--------------------------------------------------------------------------
 | TEST LETTURA FEED
 |--------------------------------------------------------------------------
 */
