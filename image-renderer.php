@@ -57,6 +57,112 @@ function hexColor(GdImage $image, string $hex): int
     );
 }
 
+/**
+ * Colore intermedio tra due tinte esadecimali (t da 0 a 1),
+ * usato per riprodurre i gradienti CSS della versione HTML.
+ */
+function gradientColor(GdImage $image, string $fromHex, string $toHex, float $t): int
+{
+    $fromHex = ltrim($fromHex, '#');
+    $toHex = ltrim($toHex, '#');
+    $t = max(0.0, min(1.0, $t));
+
+    $channel = static function (string $a, string $b, int $offset) use ($t): int {
+        $from = hexdec(substr($a, $offset, 2));
+        $to = hexdec(substr($b, $offset, 2));
+
+        return (int)round($from + ($to - $from) * $t);
+    };
+
+    return imagecolorallocate(
+        $image,
+        $channel($fromHex, $toHex, 0),
+        $channel($fromHex, $toHex, 2),
+        $channel($fromHex, $toHex, 4)
+    );
+}
+
+/**
+ * Barra verticale a capsula (estremi semicircolari) con gradiente
+ * verticale: replica la fascia laterale sfumata delle card HTML.
+ */
+function verticalGradientCapsule(
+    GdImage $image,
+    int $x1,
+    int $y1,
+    int $x2,
+    int $y2,
+    string $fromHex,
+    string $toHex
+): void {
+    $radius = max(1, (int)floor(($x2 - $x1) / 2));
+    $height = max(1, $y2 - $y1);
+
+    for ($yy = $y1; $yy <= $y2; $yy++) {
+        $inset = 0;
+        $fromTop = $yy - $y1;
+        $fromBottom = $y2 - $yy;
+
+        if ($fromTop < $radius) {
+            $dy = $radius - $fromTop;
+            $inset = $radius - (int)round(sqrt(max(0, $radius * $radius - $dy * $dy)));
+        } elseif ($fromBottom < $radius) {
+            $dy = $radius - $fromBottom;
+            $inset = $radius - (int)round(sqrt(max(0, $radius * $radius - $dy * $dy)));
+        }
+
+        imageline(
+            $image,
+            $x1 + $inset,
+            $yy,
+            $x2 - $inset,
+            $yy,
+            gradientColor($image, $fromHex, $toHex, ($yy - $y1) / $height)
+        );
+    }
+}
+
+/**
+ * Riempimento con gradiente verticale e angoli stondati su un solo lato
+ * ('left' o 'right'), per fondino data e colonna orario delle card.
+ */
+function verticalGradientRoundedSide(
+    GdImage $image,
+    int $x1,
+    int $y1,
+    int $x2,
+    int $y2,
+    int $radius,
+    string $fromHex,
+    string $toHex,
+    string $roundedSide
+): void {
+    $height = max(1, $y2 - $y1);
+
+    for ($yy = $y1; $yy <= $y2; $yy++) {
+        $inset = 0;
+        $fromTop = $yy - $y1;
+        $fromBottom = $y2 - $yy;
+
+        if ($fromTop < $radius) {
+            $dy = $radius - $fromTop;
+            $inset = $radius - (int)round(sqrt(max(0, $radius * $radius - $dy * $dy)));
+        } elseif ($fromBottom < $radius) {
+            $dy = $radius - $fromBottom;
+            $inset = $radius - (int)round(sqrt(max(0, $radius * $radius - $dy * $dy)));
+        }
+
+        imageline(
+            $image,
+            $roundedSide === 'left' ? $x1 + $inset : $x1,
+            $yy,
+            $roundedSide === 'right' ? $x2 - $inset : $x2,
+            $yy,
+            gradientColor($image, $fromHex, $toHex, ($yy - $y1) / $height)
+        );
+    }
+}
+
 function roundedRectangle(
     GdImage $image,
     int $x1,
@@ -303,27 +409,38 @@ function generatePosterJpg(array $events, string $outputPath): void
     $image = imagecreatetruecolor($width, $height);
     imageantialias($image, true);
 
+    // Palette allineata alle variabili di styles.css
     $white = hexColor($image, '#FFFFFF');
-    $navy = hexColor($image, '#073764');
-    $navyDark = hexColor($image, '#052C55');
+    $navy = hexColor($image, '#06315F');
     $blue = hexColor($image, '#0B5FA9');
-    $blueLight = hexColor($image, '#DDEEFF');
-    $dateBlue = hexColor($image, '#EAF5FF');
-    $text = hexColor($image, '#102D50');
-    $muted = hexColor($image, '#637187');
-    $line = hexColor($image, '#D6E2ED');
+    $chipBg = hexColor($image, '#E3F0FF');
+    $chipBorder = hexColor($image, '#CFE3F7');
+    $text = hexColor($image, '#112F52');
+    $muted = hexColor($image, '#627187');
+    $line = hexColor($image, '#D7E3EF');
     $shadow = hexColor($image, '#E8EEF4');
-    $accent = hexColor($image, '#7CC8EE');
+    $accent = hexColor($image, '#6FC4ED');
+    $heroFrom = '#052D59';
+    $heroTo = '#0A69AD';
 
     imagefill($image, 0, 0, $white);
 
-    // Header
+    // Header con gradiente diagonale come la versione HTML
     $headerHeight = scaleValue(280);
-    imagefilledrectangle($image, 0, 0, $width, $headerHeight, $navyDark);
+    for ($x = 0; $x < $width; $x++) {
+        imageline(
+            $image,
+            $x,
+            0,
+            $x,
+            $headerHeight,
+            gradientColor($image, $heroFrom, $heroTo, $x / max(1, $width - 1))
+        );
+    }
     imagefilledrectangle(
         $image,
         0,
-        $headerHeight - scaleValue(4),
+        $headerHeight - scaleValue(5),
         $width,
         $headerHeight,
         $accent
@@ -367,7 +484,9 @@ function generatePosterJpg(array $events, string $outputPath): void
         'da non perdere'
     );
 
-    drawCalendarIcon($image, scaleValue(920), scaleValue(62), $white, $navyDark);
+    // L'interno dell'icona riprende il colore del gradiente in quel punto
+    $iconInner = gradientColor($image, $heroFrom, $heroTo, 964 / 1080);
+    drawCalendarIcon($image, scaleValue(920), scaleValue(62), $white, $iconInner);
 
     // Eventi
     $eventsTop = 310;
@@ -384,6 +503,22 @@ function generatePosterJpg(array $events, string $outputPath): void
     // per card più basse vengono compresse in proporzione.
     $s = min(1.0, $cardHeight / 175);
     $sy = static fn(int|float $value): int => (int)round($value * $s);
+
+    // Fondo dell'area eventi: gradiente leggero e texture puntinata (.events)
+    for ($yy = $headerHeight + 1; $yy < $height; $yy++) {
+        $t = ($yy - $headerHeight) / max(1, $height - $headerHeight - 1);
+        imageline($image, 0, $yy, $width, $yy, gradientColor($image, '#FFFFFF', '#F5FAFE', $t));
+    }
+
+    $dot = hexColor($image, '#E2EDF6');
+    $dotStep = scaleValue(24);
+    $dotSize = scaleValue(2);
+    $dotBottom = scaleValue($footerTop - 10);
+    for ($dy = $headerHeight + $dotStep; $dy < $dotBottom; $dy += $dotStep) {
+        for ($dx = $dotStep; $dx < $width; $dx += $dotStep) {
+            imagefilledellipse($image, $dx, $dy, $dotSize, $dotSize, $dot);
+        }
+    }
 
     $y = $eventsTop;
 
@@ -423,37 +558,29 @@ function generatePosterJpg(array $events, string $outputPath): void
 
         $dateRight = 225;
 
-        // Fondino azzurro con gli angoli sinistri stondati come la card
-        roundedRectangle(
+        // Fondino data con gradiente e angoli sinistri stondati (.date-block)
+        verticalGradientRoundedSide(
             $image,
             scaleValue($x1 + 2),
             scaleValue($y + 2),
             scaleValue($dateRight),
             scaleValue($y + $cardHeight - 2),
             scaleValue(17),
-            $dateBlue
+            '#E8F3FD',
+            '#FBFDFF',
+            'left'
         );
 
-        // Il lato destro del fondino resta dritto fino alla linea divisoria
-        imagefilledrectangle(
-            $image,
-            scaleValue($dateRight - 20),
-            scaleValue($y + 2),
-            scaleValue($dateRight),
-            scaleValue($y + $cardHeight - 2),
-            $dateBlue
-        );
-
-        // Fascia blu verticale con estremi arrotondati, contenuta
-        // dentro gli angoli stondati della card.
-        roundedRectangle(
+        // Fascia laterale sfumata blu→celeste con estremi arrotondati,
+        // contenuta dentro gli angoli stondati della card.
+        verticalGradientCapsule(
             $image,
             scaleValue($x1 + 2),
             scaleValue($y + 14),
             scaleValue($x1 + 8),
             scaleValue($y + $cardHeight - 14),
-            scaleValue(3),
-            $blue
+            '#0A69AD',
+            '#56B7E8'
         );
 
         imageline(
@@ -523,31 +650,39 @@ function generatePosterJpg(array $events, string $outputPath): void
         $metaDividerX = 765;
         $mainWidth = $metaDividerX - $mainX - 32;
 
-        roundedRectangle(
-            $image,
-            scaleValue($mainX),
-            scaleValue($y + 24),
-            scaleValue($mainX + 96),
-            scaleValue($y + 55),
-            scaleValue(8),
-            $blueLight
-        );
-
+        // Badge categoria a pillola con larghezza dinamica (.category)
         $category = mb_strtoupper($event['category'], 'UTF-8');
         $categorySize = fitTextSize(
             $category,
-            scaleValue(13),
-            scaleValue(10),
-            scaleValue(76),
+            scaleValue(12),
+            scaleValue(9),
+            scaleValue(230),
             $bold
+        );
+        $chipPadding = scaleValue(14);
+        $chipLeft = scaleValue($mainX);
+        $chipRight = $chipLeft + textWidth($category, $categorySize, $bold) + $chipPadding * 2;
+        $chipTop = scaleValue($y + 24);
+        $chipBottom = scaleValue($y + 55);
+        $chipRadius = (int)floor(($chipBottom - $chipTop) / 2);
+
+        roundedRectangle($image, $chipLeft, $chipTop, $chipRight, $chipBottom, $chipRadius, $chipBorder);
+        roundedRectangle(
+            $image,
+            $chipLeft + 2,
+            $chipTop + 2,
+            $chipRight - 2,
+            $chipBottom - 2,
+            max(1, $chipRadius - 2),
+            $chipBg
         );
 
         imagettftext(
             $image,
             $categorySize,
             0,
-            scaleValue($mainX + 11),
-            scaleValue($y + 46),
+            $chipLeft + $chipPadding,
+            scaleValue($y + 45),
             $navy,
             $bold,
             $category
@@ -611,6 +746,19 @@ function generatePosterJpg(array $events, string $outputPath): void
                 $descriptionLineHeight
             );
         }
+
+        // Velatura azzurrina della colonna orario/luogo (.event-meta)
+        verticalGradientRoundedSide(
+            $image,
+            scaleValue($metaDividerX) + 1,
+            scaleValue($y + 2),
+            scaleValue($x2 - 2),
+            scaleValue($y + $cardHeight - 2),
+            scaleValue(17),
+            '#F7FBFE',
+            '#EDF5FC',
+            'right'
+        );
 
         imageline(
             $image,
@@ -688,7 +836,7 @@ function generatePosterJpg(array $events, string $outputPath): void
         $y += $cardHeight + $gap;
     }
 
-    // Footer
+    // Footer con bordo e fondo azzurrino (.footer)
     roundedRectangle(
         $image,
         scaleValue(42),
@@ -696,7 +844,16 @@ function generatePosterJpg(array $events, string $outputPath): void
         scaleValue(1038),
         scaleValue($footerTop + $footerHeight),
         scaleValue(16),
-        $blueLight
+        hexColor($image, '#D8E8F7')
+    );
+    roundedRectangle(
+        $image,
+        scaleValue(42) + 2,
+        scaleValue($footerTop) + 2,
+        scaleValue(1038) - 2,
+        scaleValue($footerTop + $footerHeight) - 2,
+        scaleValue(15),
+        hexColor($image, '#EEF6FE')
     );
 
     imagettftext(
