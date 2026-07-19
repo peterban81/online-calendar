@@ -176,7 +176,79 @@ function extractTimeParts(string $text): array
 }
 
 /**
- * Legge la vera data dell'evento.
+ * Estrae una data (con eventuale orario) da un testo nei formati
+ * riconosciuti: ISO 2026-09-05, italiano "23 luglio 2026", numerico
+ * 23/07/2026 e iCalendar 20260723T180000.
+ */
+function parseDateFromText(string $source, string $explicitTime): ?DateTimeImmutable
+{
+    $months = italianMonths();
+    $monthPattern = implode('|', array_keys($months));
+
+    // ISO: 2026-09-05, eventualmente seguita da un orario
+    if (preg_match('/\b(\d{4})-(\d{1,2})-(\d{1,2})(?:\D{1,10}?(\d{1,2})[.:](\d{2}))?/u', $source, $m)) {
+        $hour = isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0;
+        $minute = isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0;
+
+        if (($hour === 0 && $minute === 0) && $explicitTime !== '') {
+            [$hour, $minute] = extractTimeParts($explicitTime);
+        }
+
+        return makeDate((int)$m[1], (int)$m[2], (int)$m[3], $hour, $minute);
+    }
+
+    // 23 luglio 2026, ore 18.00
+    if (preg_match(
+        '/\b(\d{1,2})\s+(' . $monthPattern . ')\s+(\d{4})(?:\s*(?:,|-|–)?\s*(?:ore?)?\s*(\d{1,2})[.:](\d{2}))?/ui',
+        $source,
+        $m
+    )) {
+        $hour = isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0;
+        $minute = isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0;
+
+        if (($hour === 0 && $minute === 0) && $explicitTime !== '') {
+            [$hour, $minute] = extractTimeParts($explicitTime);
+        }
+
+        return makeDate((int)$m[3], $months[mb_strtolower($m[2], 'UTF-8')], (int)$m[1], $hour, $minute);
+    }
+
+    // 23/07/2026 18:00
+    if (preg_match('/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:\D+?(\d{1,2})[.:](\d{2}))?/u', $source, $m)) {
+        $year = (int)$m[3];
+        if ($year < 100) {
+            $year += 2000;
+        }
+
+        $hour = isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0;
+        $minute = isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0;
+
+        if (($hour === 0 && $minute === 0) && $explicitTime !== '') {
+            [$hour, $minute] = extractTimeParts($explicitTime);
+        }
+
+        return makeDate($year, (int)$m[2], (int)$m[1], $hour, $minute);
+    }
+
+    // iCalendar: 20260723T180000
+    if (preg_match('/\b(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/u', $source, $m)) {
+        return makeDate(
+            (int)$m[1],
+            (int)$m[2],
+            (int)$m[3],
+            isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0,
+            isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0
+        );
+    }
+
+    return null;
+}
+
+/**
+ * Legge la vera data di INIZIO dell'evento.
+ * Il campo esplicito del feed (es. event_date) ha sempre la precedenza:
+ * il testo di titolo e descrizione viene usato solo se il campo manca,
+ * perché può citare altre date (es. "dal 13 al 18 agosto").
  * Non considera volutamente pubDate, published o updated.
  */
 function parseEventDate(string $explicitDate, string $explicitTime, string $searchableText): ?DateTimeImmutable
@@ -185,71 +257,23 @@ function parseEventDate(string $explicitDate, string $explicitTime, string $sear
     $explicitTime = cleanText($explicitTime);
     $searchableText = cleanText($searchableText);
 
-    $sources = [];
     if ($explicitDate !== '') {
-        $sources[] = trim($explicitDate . ' ' . $explicitTime);
-    }
-    $sources[] = $searchableText;
+        $candidate = trim($explicitDate . ' ' . $explicitTime);
 
-    $months = italianMonths();
-    $monthPattern = implode('|', array_keys($months));
-
-    foreach ($sources as $source) {
-        // 23 luglio 2026, ore 18.00
-        if (preg_match(
-            '/\b(\d{1,2})\s+(' . $monthPattern . ')\s+(\d{4})(?:\s*(?:,|-|–)?\s*(?:ore?)?\s*(\d{1,2})[.:](\d{2}))?/ui',
-            $source,
-            $m
-        )) {
-            $hour = isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0;
-            $minute = isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0;
-
-            if (($hour === 0 && $minute === 0) && $explicitTime !== '') {
-                [$hour, $minute] = extractTimeParts($explicitTime);
-            }
-
-            return makeDate((int)$m[3], $months[mb_strtolower($m[2], 'UTF-8')], (int)$m[1], $hour, $minute);
+        $date = parseDateFromText($candidate, $explicitTime);
+        if ($date) {
+            return $date;
         }
 
-        // 23/07/2026 18:00
-        if (preg_match('/\b(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})(?:\D+?(\d{1,2})[.:](\d{2}))?/u', $source, $m)) {
-            $year = (int)$m[3];
-            if ($year < 100) {
-                $year += 2000;
-            }
-
-            $hour = isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0;
-            $minute = isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0;
-
-            if (($hour === 0 && $minute === 0) && $explicitTime !== '') {
-                [$hour, $minute] = extractTimeParts($explicitTime);
-            }
-
-            return makeDate($year, (int)$m[2], (int)$m[1], $hour, $minute);
-        }
-
-        // iCalendar: 20260723T180000
-        if (preg_match('/\b(\d{4})(\d{2})(\d{2})T?(\d{2})?(\d{2})?/u', $source, $m)) {
-            return makeDate(
-                (int)$m[1],
-                (int)$m[2],
-                (int)$m[3],
-                isset($m[4]) && $m[4] !== '' ? (int)$m[4] : 0,
-                isset($m[5]) && $m[5] !== '' ? (int)$m[5] : 0
-            );
-        }
-    }
-
-    // ISO/RFC solo per un campo esplicito dell'evento, mai sul testo generico.
-    if ($explicitDate !== '') {
+        // Ultimo tentativo: formati ISO/RFC riconosciuti direttamente da PHP.
         try {
-            return new DateTimeImmutable(trim($explicitDate . ' ' . $explicitTime), new DateTimeZone('Europe/Rome'));
+            return new DateTimeImmutable($candidate, new DateTimeZone('Europe/Rome'));
         } catch (Throwable) {
-            return null;
+            // Campo non interpretabile: si prova con il testo dell'evento.
         }
     }
 
-    return null;
+    return parseDateFromText($searchableText, $explicitTime);
 }
 
 function eventTimeLabel(DateTimeImmutable $date, string $explicitTime, string $text): string
@@ -326,7 +350,7 @@ function parseEvents(string $xmlText, int $limit = MAX_EVENTS): array
             'title' => $title,
             'description' => $description !== '' ? $description : 'Maggiori informazioni nel calendario online.',
             'category' => xmlNodeValue($node, ['categoria', 'category', 'tipologia', 'type']) ?: 'Evento',
-            'place' => xmlNodeValue($node, ['luogo', 'location', 'sede', 'venue', 'address', 'indirizzo']) ?: 'Campoformido',
+            'place' => xmlNodeValue($node, ['luogo', 'event_location', 'location', 'sede', 'venue', 'address', 'indirizzo']) ?: 'Campoformido',
             'locality' => xmlNodeValue($node, ['frazione', 'localita', 'località', 'city', 'comune', 'town']),
             'start' => $start,
             'time' => eventTimeLabel($start, $explicitTime, $searchable),
