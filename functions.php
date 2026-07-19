@@ -49,15 +49,17 @@ function localName(string $name): string
 }
 
 /**
- * Cerca il primo valore non vuoto tra i discendenti XML.
+ * Cerca un valore non vuoto tra i discendenti XML.
+ * L'ordine della lista $wantedNames determina la priorità: il primo nome
+ * presente nell'item vince, indipendentemente dalla posizione nel
+ * documento (es. data_inizio batte event_date anche se compare dopo).
  */
 function xmlNodeValue(SimpleXMLElement $node, array $wantedNames): string
 {
-    $wanted = array_map('localName', $wantedNames);
     $nodes = $node->xpath('.//*') ?: [];
-
     array_unshift($nodes, $node);
 
+    $valuesByName = [];
     foreach ($nodes as $candidate) {
         $dom = dom_import_simplexml($candidate);
         if (!$dom) {
@@ -65,13 +67,20 @@ function xmlNodeValue(SimpleXMLElement $node, array $wantedNames): string
         }
 
         $key = localName($dom->localName ?: $dom->nodeName);
-        if (!in_array($key, $wanted, true)) {
+        if (isset($valuesByName[$key])) {
             continue;
         }
 
         $value = cleanText((string)$candidate);
         if ($value !== '') {
-            return $value;
+            $valuesByName[$key] = $value;
+        }
+    }
+
+    foreach ($wantedNames as $wanted) {
+        $key = localName($wanted);
+        if (isset($valuesByName[$key])) {
+            return $valuesByName[$key];
         }
     }
 
@@ -293,9 +302,12 @@ function parseEvents(string $xmlText, int $limit = MAX_EVENTS): array
         $title = xmlNodeValue($node, ['titolo', 'title', 'nome', 'name', 'summary']);
         $description = xmlNodeValue($node, ['descrizione', 'description', 'excerpt', 'content', 'contentencoded', 'details']);
 
+        // Prima i campi che indicano esplicitamente l'INIZIO dell'evento;
+        // event_date per ultimo perché in alcuni feed contiene la data di fine.
         $explicitDate = xmlNodeValue($node, [
             'data_inizio', 'data-inizio', 'datainizio', 'startdate', 'start-date',
-            'eventstartdate', 'event-date', 'eventdate', 'dtstart', 'start', 'inizio',
+            'eventstartdate', 'event_start_date', 'dtstart', 'inizio', 'start',
+            'event-date', 'eventdate',
         ]);
 
         $explicitTime = xmlNodeValue($node, [
