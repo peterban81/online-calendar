@@ -346,12 +346,28 @@ function parseEvents(string $xmlText, int $limit = MAX_EVENTS): array
             continue;
         }
 
+        $place = xmlNodeValue($node, ['luogo', 'event_location', 'location', 'sede', 'venue', 'address', 'indirizzo']) ?: 'Campoformido';
+        $locality = xmlNodeValue($node, ['frazione', 'localita', 'località', 'city', 'comune', 'town']);
+
+        // Feed tipo "Area Festeggiamenti - Bressa": la parte dopo l'ultimo
+        // " - " è la frazione/località e va nel campo dedicato.
+        if ($locality === '' && str_contains($place, ' - ')) {
+            $separatorPos = strrpos($place, ' - ');
+            $locality = trim(substr($place, $separatorPos + 3));
+            $place = trim(substr($place, 0, $separatorPos));
+        }
+
+        // "CAMPOFORMIDO" -> "Campoformido"
+        if ($locality !== '' && $locality === mb_strtoupper($locality, 'UTF-8')) {
+            $locality = mb_convert_case(mb_strtolower($locality, 'UTF-8'), MB_CASE_TITLE, 'UTF-8');
+        }
+
         $events[] = [
             'title' => $title,
             'description' => $description !== '' ? $description : 'Maggiori informazioni nel calendario online.',
             'category' => xmlNodeValue($node, ['categoria', 'category', 'tipologia', 'type']) ?: 'Evento',
-            'place' => xmlNodeValue($node, ['luogo', 'event_location', 'location', 'sede', 'venue', 'address', 'indirizzo']) ?: 'Campoformido',
-            'locality' => xmlNodeValue($node, ['frazione', 'localita', 'località', 'city', 'comune', 'town']),
+            'place' => $place,
+            'locality' => $locality,
             'start' => $start,
             'time' => eventTimeLabel($start, $explicitTime, $searchable),
             'link' => xmlNodeValue($node, ['link', 'url', 'permalink']),

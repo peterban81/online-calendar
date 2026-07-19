@@ -253,6 +253,19 @@ function wrapText(
     return $lines;
 }
 
+function truncateToWidth(string $text, float $size, string $font, int $maxWidth): string
+{
+    if (textWidth($text, $size, $font) <= $maxWidth) {
+        return $text;
+    }
+
+    while ($text !== '' && textWidth(rtrim($text) . '…', $size, $font) > $maxWidth) {
+        $text = mb_substr($text, 0, -1, 'UTF-8');
+    }
+
+    return rtrim($text) . '…';
+}
+
 function drawLines(
     GdImage $image,
     array $lines,
@@ -801,26 +814,37 @@ function generatePosterJpg(array $events, string $outputPath): void
             $white
         );
 
-        $placeSize = fitTextSize(
-            $event['place'],
-            scaleValue(17),
-            scaleValue(13),
-            scaleValue(175),
-            $bold
-        );
+        // Luogo: con la frazione presente resta su una riga, riducendo il
+        // corpo finché entra per intero e accorciando con i puntini solo
+        // come ultima risorsa; senza frazione può andare a capo su 2 righe.
+        $placeMaxWidth = scaleValue(185);
+        $hasLocality = $event['locality'] !== '';
 
-        imagettftext(
+        if ($hasLocality) {
+            $placeSize = fitTextSize($event['place'], scaleValue(17), scaleValue(12), $placeMaxWidth, $bold);
+            $placeLines = [truncateToWidth($event['place'], $placeSize, $bold, $placeMaxWidth)];
+        } else {
+            $placeSize = scaleValue(17);
+            $placeLines = [$event['place']];
+
+            if (textWidth($event['place'], $placeSize, $bold) > $placeMaxWidth) {
+                $placeSize = scaleValue(14);
+                $placeLines = wrapText($event['place'], $placeSize, $bold, $placeMaxWidth, 2);
+            }
+        }
+
+        drawLines(
             $image,
-            $placeSize,
-            0,
+            $placeLines,
             scaleValue($metaX + 35),
             scaleValue($y + $sy(144)),
+            $placeSize,
             $text,
             $bold,
-            $event['place']
+            scaleValue($sy(21))
         );
 
-        if ($event['locality'] !== '') {
+        if ($hasLocality) {
             imagettftext(
                 $image,
                 scaleValue(13),
